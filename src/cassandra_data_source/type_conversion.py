@@ -38,7 +38,7 @@ def convert_value(value, cassandra_type):
     if cass_type == "int":
         if isinstance(value, int):
             # Check for overflow (Cassandra int is 32-bit)
-            if value < -2**31 or value >= 2**31:
+            if value < -(2**31) or value >= 2**31:
                 raise ValueError(f"Integer overflow: {value} exceeds int32 range")
             return value
 

@@ -28,6 +28,9 @@ pyarrow = "^21.0.0"
 [tool.poetry]
 packages = [{include = "cassandra_data_source", from = "src"}]
 
+[tool.mypy]
+ignore_missing_imports = true
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"

@@ -122,14 +122,14 @@ See [Design Document](docs/plans/2025-12-29-pycassandra-design.md) for comprehen
 
 ## Phase 1 Status
 
--  Batch writes
--  Streaming writes
--  Connection management (host, port, auth, SSL)
--  Primary key validation
--  Type conversion (String <-> UUID, Int <-> BigInt)
--  Delete flag support
-- ó Batch reads (Phase 3)
-- ó Streaming reads (Phase 4)
+- [x] Batch writes
+- [x] Streaming writes
+- [x] Connection management (host, port, auth, SSL)
+- [x] Primary key validation
+- [x] Type conversion (String <-> UUID, Int <-> BigInt)
+- [x] Delete flag support
+- [ ] Batch reads (Phase 3)
+- [ ] Streaming reads (Phase 4)
 
 ## License
 

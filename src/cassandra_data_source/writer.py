@@ -8,8 +8,14 @@ class CassandraWriter:
 
     # Valid Cassandra consistency levels
     VALID_CONSISTENCY_LEVELS = {
-        "ONE", "TWO", "THREE", "QUORUM", "ALL",
-        "LOCAL_QUORUM", "EACH_QUORUM", "LOCAL_ONE"
+        "ONE",
+        "TWO",
+        "THREE",
+        "QUORUM",
+        "ALL",
+        "LOCAL_QUORUM",
+        "EACH_QUORUM",
+        "LOCAL_ONE",
     }
 
     def __init__(self, options, schema):
@@ -52,9 +58,7 @@ class CassandraWriter:
 
         # Validate SSL options
         if self.ssl_ca_cert and not self.ssl_enabled:
-            raise ValueError(
-                "ssl_ca_cert requires ssl_enabled=true"
-            )
+            raise ValueError("ssl_ca_cert requires ssl_enabled=true")
 
         # Store metadata (will be populated in write())
         self.pk_columns = None
@@ -81,7 +85,9 @@ class CassandraWriter:
         self.pk_columns = [col.name for col in table_meta.primary_key]
 
         # Get all column metadata for type conversion
-        self.column_types = {col.name: col.cql_type for col in table_meta.columns.values()}
+        self.column_types = {
+            col.name: col.cql_type for col in table_meta.columns.values()
+        }
 
         # Validate DataFrame schema contains all PK columns
         df_columns = set(field.name for field in self.schema.fields)
@@ -102,7 +108,11 @@ class CassandraWriter:
 
         # Validate all DataFrame columns (except delete flag) exist in Cassandra
         cassandra_columns = set(self.column_types.keys())
-        data_columns = df_columns - {self.delete_flag_column} if self.delete_flag_column else df_columns
+        data_columns = (
+            df_columns - {self.delete_flag_column}
+            if self.delete_flag_column
+            else df_columns
+        )
         unknown_columns = data_columns - cassandra_columns
 
         if unknown_columns:
@@ -132,16 +142,12 @@ class CassandraWriter:
         from cassandra_data_source.type_conversion import convert_value
 
         # Create cluster connection
-        kwargs = {
-            "contact_points": [self.host],
-            "port": self.port
-        }
+        kwargs = {"contact_points": [self.host], "port": self.port}
 
         # Add authentication if provided
         if self.username and self.password:
             kwargs["auth_provider"] = PlainTextAuthProvider(
-                username=self.username,
-                password=self.password
+                username=self.username, password=self.password
             )
 
         # Add SSL if enabled
@@ -167,18 +173,23 @@ class CassandraWriter:
                 "ALL": ConsistencyLevel.ALL,
                 "LOCAL_QUORUM": ConsistencyLevel.LOCAL_QUORUM,
                 "EACH_QUORUM": ConsistencyLevel.EACH_QUORUM,
-                "LOCAL_ONE": ConsistencyLevel.LOCAL_ONE
+                "LOCAL_ONE": ConsistencyLevel.LOCAL_ONE,
             }
             consistency_level = consistency_map[self.consistency]
 
             # Get all columns except delete flag
-            data_columns = [field.name for field in self.schema.fields
-                           if field.name != self.delete_flag_column]
+            data_columns = [
+                field.name
+                for field in self.schema.fields
+                if field.name != self.delete_flag_column
+            ]
 
             # Prepare INSERT statement
             columns_str = ", ".join(data_columns)
             placeholders = ", ".join(["?"] * len(data_columns))
-            insert_cql = f"INSERT INTO {self.table} ({columns_str}) VALUES ({placeholders})"
+            insert_cql = (
+                f"INSERT INTO {self.table} ({columns_str}) VALUES ({placeholders})"
+            )
             prepared_insert = session.prepare(insert_cql)
             prepared_insert.consistency_level = consistency_level
 
@@ -196,7 +207,7 @@ class CassandraWriter:
             row_count = 0
 
             for row in iterator:
-                row_dict = row.asDict() if hasattr(row, 'asDict') else dict(row)
+                row_dict = row.asDict() if hasattr(row, "asDict") else dict(row)
 
                 # Check if this is a delete
                 is_delete = False
@@ -212,7 +223,9 @@ class CassandraWriter:
                     for pk in self.pk_columns:
                         value = row_dict[pk]
                         if value is None:
-                            raise ValueError(f"Primary key column '{pk}' cannot be null for DELETE")
+                            raise ValueError(
+                                f"Primary key column '{pk}' cannot be null for DELETE"
+                            )
                         cassandra_type = self.column_types.get(pk, "text")
                         converted = convert_value(value, cassandra_type)
                         pk_values.append(converted)
@@ -242,7 +255,7 @@ class CassandraWriter:
                             prepared_insert,
                             insert_params,
                             concurrency=self.concurrency,
-                            raise_on_first_error=True
+                            raise_on_first_error=True,
                         )
                         insert_params = []
 
@@ -252,7 +265,7 @@ class CassandraWriter:
                             prepared_delete,
                             delete_params,
                             concurrency=self.concurrency,
-                            raise_on_first_error=True
+                            raise_on_first_error=True,
                         )
                         delete_params = []
 
@@ -263,7 +276,7 @@ class CassandraWriter:
                     prepared_insert,
                     insert_params,
                     concurrency=self.concurrency,
-                    raise_on_first_error=True
+                    raise_on_first_error=True,
                 )
 
             if delete_params and prepared_delete:
@@ -272,7 +285,7 @@ class CassandraWriter:
                     prepared_delete,
                     delete_params,
                     concurrency=self.concurrency,
-                    raise_on_first_error=True
+                    raise_on_first_error=True,
                 )
 
             return WriterCommitMessage()
@@ -283,6 +296,7 @@ class CassandraWriter:
 
 class CassandraBatchWriter(CassandraWriter, DataSourceWriter):
     """Batch writer for Cassandra."""
+
     pass
 
 
