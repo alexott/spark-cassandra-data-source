@@ -2,7 +2,7 @@
 
 **Date:** 2025-12-29
 **Status:** Approved
-**Version:** 1.0
+**Version:** 1.1 (Updated to address inconsistencies)
 
 ## Overview
 
@@ -29,14 +29,14 @@ PyCassandra follows the standard PySpark Data Source API pattern with a simple, 
 
 1. **CassandraDataSource** - Entry point class implementing `DataSource`
    - Returns format name: `"pycassandra"`
-   - Implements `schema()` - returns Spark schema (offloads to CassandraReader)
+   - Implements `schema()` - returns Spark schema (implemented in Phase 2 with readers)
    - Factory methods: `writer()`, `streamWriter()`, `reader()`, `streamReader()`
 
 2. **CassandraWriter** - Base writer class with shared logic
-   - Validates options and connects to Cassandra in `__init__`
-   - Queries table metadata to validate primary keys early
-   - Implements `write(iterator)` with concurrent execution
-   - Creates Cassandra session per partition (imports inside method)
+   - Validates options in `__init__` (does NOT connect - validation happens in write())
+   - Implements `write(iterator)` with executor-side imports, connection, and concurrent execution
+   - Creates Cassandra session per partition inside `write()` method
+   - All cassandra-driver imports happen inside `write()` for executor isolation
 
 3. **CassandraBatchWriter(CassandraWriter, DataSourceWriter)** - Batch writes
    - Inherits all logic from base writer
@@ -74,10 +74,11 @@ PyCassandra follows the standard PySpark Data Source API pattern with a simple, 
 
 | Option | Required | Default | Description |
 |--------|----------|---------|-------------|
-| `batch_size` | No | 100 | Number of concurrent requests in execute_concurrent_with_args |
+| `concurrency` | No | 100 | Number of concurrent requests in execute_concurrent_with_args |
+| `rows_per_batch` | No | 1000 | Number of rows to buffer before flushing to Cassandra |
 | `delete_flag_column` | No | - | Column name that indicates row should be deleted |
 | `delete_flag_value` | No | - | Value that triggers deletion (e.g., "true", "1") |
-| `consistency` | No | LOCAL_QUORUM | Write consistency level |
+| `consistency` | No | LOCAL_QUORUM | Write consistency level (ONE, QUORUM, LOCAL_QUORUM, ALL, etc.) |
 
 ### Read Options
 
@@ -88,10 +89,17 @@ PyCassandra follows the standard PySpark Data Source API pattern with a simple, 
 
 ### Validation Rules
 
-- Required options checked in `__init__` - fail fast with clear error message
-- Consistency level validated against known Cassandra levels
-- If `delete_flag_column` specified, `delete_flag_value` must also be provided
-- SSL: if `ssl_ca_cert` provided, `ssl_enabled` must be true
+**In `__init__` (fail fast before any work):**
+- Required options checked (host, keyspace, table) - raise `ValueError` with clear message
+- If `delete_flag_column` specified, `delete_flag_value` must also be provided (and vice versa)
+- If `ssl_ca_cert` provided, `ssl_enabled` must be "true"
+- Consistency level must be valid (ONE, TWO, THREE, QUORUM, ALL, LOCAL_QUORUM, EACH_QUORUM, LOCAL_ONE) - raise `ValueError` on unknown
+
+**In `write()` method (first time executed on executor):**
+- Connect to Cassandra and query table metadata
+- Validate DataFrame contains all primary key columns
+- Validate `delete_flag_column` (if specified) exists in DataFrame schema
+- Validate all DataFrame columns exist in Cassandra table
 
 ## Type Mapping and Conversion
 
@@ -111,8 +119,8 @@ Aggressive mapping with safe fallbacks:
 | DATE | DateType | Direct mapping |
 | DECIMAL | DecimalType | Direct mapping |
 | BLOB | BinaryType | Direct mapping |
-| UUID, TIMEUUID | StringType | Unsupported, safe fallback |
-| INET | StringType | Unsupported, safe fallback |
+| UUID, TIMEUUID | StringType | Mapped to string (no native UUID type in Spark) |
+| INET | StringType | Mapped to string (no native IP type in Spark) |
 | UDT, TUPLE | StringType | JSON representation |
 | LIST, SET, MAP | StringType | JSON representation |
 
@@ -140,23 +148,26 @@ Automatic conversion with validation:
 ### Write Flow
 
 1. **Initialization (`__init__`)**
-   - Extract and validate all required options
-   - Create temporary Cassandra connection to query table metadata
-   - Get primary key columns (partition key + clustering columns)
-   - Validate DataFrame schema contains all PK columns
-   - Close temporary connection
-   - Store options and prepare INSERT/DELETE CQL templates
+   - Extract and validate all required options (fail fast)
+   - Validate consistency level against known values
+   - Validate delete flag options (both or neither)
+   - Validate SSL options (ca_cert requires ssl_enabled)
+   - Store options (no Cassandra connection yet)
 
-2. **Write Execution (`write(iterator)`)**
-   - Import cassandra-driver (executor-side import)
-   - Create Cassandra session for this partition
-   - Prepare INSERT statement with all DataFrame columns
+2. **Write Execution (`write(iterator)` - runs on executor)**
+   - Import cassandra-driver inside method (executor-side import)
+   - Create Cassandra cluster and session for this partition
+   - Query table metadata to get primary keys and column types
+   - Validate DataFrame schema contains all PK columns
+   - Validate delete flag column exists (if specified)
+   - Prepare INSERT statement with all data columns (excluding delete flag)
    - If delete flag specified, also prepare DELETE statement
-   - Collect rows from iterator into batches (size = `batch_size`)
-   - For each batch:
+   - Process rows in batches:
+     - Accumulate up to `rows_per_batch` rows
      - Separate normal rows from delete-flagged rows
-     - Execute concurrent inserts: `execute_concurrent_with_args(session, prepared_insert, insert_rows, concurrency=batch_size)`
-     - Execute concurrent deletes: `execute_concurrent_with_args(session, prepared_delete, delete_rows, concurrency=batch_size)`
+     - Apply type conversions (String → UUID, etc.)
+     - Execute concurrent inserts: `execute_concurrent_with_args(session, prepared_insert, insert_rows, concurrency=concurrency)`
+     - Execute concurrent deletes: `execute_concurrent_with_args(session, prepared_delete, delete_rows, concurrency=concurrency)`
      - Fail fast on any error
    - Close session and return `SimpleCommitMessage`
 
@@ -312,38 +323,32 @@ df = spark.read.format("pycassandra") \
 
 ## Implementation Phases
 
-### Phase 1: Write Operations (Batch & Streaming)
+### Phase 1: Write Operations (Batch & Streaming with Delete Support)
 
 **Deliverables:**
 - Implement `CassandraDataSource`, `CassandraWriter` base class
 - Implement `CassandraBatchWriter` and `CassandraStreamWriter`
 - Connection management (host, port, username, password, SSL)
-- Primary key validation during initialization
+- Options validation in `__init__` (fail fast)
+- Deferred PK validation in `write()` method
 - Type conversion with validation (String → UUID, etc.)
+- Delete flag support (`delete_flag_column` and `delete_flag_value`)
+- Incremental batching with `rows_per_batch` and `concurrency` options
 - Concurrent execution with `execute_concurrent_with_args`
 
 **Testing:**
 - Write to table with various data types
-- Validate PK presence check
+- Validate options and PK presence check
 - Test type conversions (especially String → UUID)
+- Test delete flag functionality
 - Test both batch and streaming writes
+- Integration tests with real Cassandra
 
-### Phase 2: Delete Flag Support
-
-**Deliverables:**
-- Add `delete_flag_column` and `delete_flag_value` options
-- Modify write logic to separate INSERT vs DELETE rows
-- Ensure delete flag column is excluded from statements
-
-**Testing:**
-- Write with deletes
-- Verify rows removed from Cassandra
-- Test delete flag validation
-
-### Phase 3: Batch Read Operations
+### Phase 2: Batch Read Operations
 
 **Deliverables:**
 - Implement `CassandraReader` base class and `CassandraBatchReader`
+- Implement `CassandraDataSource.schema()` method
 - Token range scanning following TokenRangesScan.java pattern
 - Schema derivation from Cassandra metadata
 - Schema validation when user provides explicit schema
@@ -357,7 +362,7 @@ df = spark.read.format("pycassandra") \
 - Token range partitioning with real data
 - Column projection
 
-### Phase 4: Streaming Reads (Future)
+### Phase 3: Streaming Reads (Future)
 
 **Deliverables:**
 - Investigate Cassandra CDC integration
@@ -370,10 +375,20 @@ df = spark.read.format("pycassandra") \
 
 ### Fail Fast Validation
 
-- Missing required options → `ValueError` with clear message in `__init__`
-- Missing PK columns in DataFrame → `ValueError` during writer init
-- Invalid consistency level → `ValueError` during init
-- Schema mismatch (when user provides schema) → `ValueError` during reader init
+**In `__init__`:**
+- Missing required options → `ValueError` with clear message
+- Invalid consistency level → `ValueError` with list of valid levels
+- Delete flag options mismatch → `ValueError` (must specify both or neither)
+- SSL options mismatch → `ValueError` (ca_cert requires ssl_enabled=true)
+
+**In `write()` method:**
+- Missing PK columns in DataFrame → `ValueError` with list of missing columns
+- Delete flag column not in DataFrame → `ValueError`
+- DataFrame column not in Cassandra table → `ValueError`
+- Null PK values → `ValueError` with row context
+
+**In `read()` method:**
+- Schema mismatch (when user provides schema) → `ValueError` with diff
 
 ### Connection Errors
 
@@ -383,9 +398,9 @@ df = spark.read.format("pycassandra") \
 
 ### Write Errors
 
-- Type conversion failures → Fail immediately with row details
-- Concurrent write failures → Fail fast on first error (Phase 1)
-- Include partial error context (which row, which column)
+- Type conversion failures → Fail immediately with row details (which row, which column, which conversion)
+- Concurrent write failures → Fail fast on first error (`raise_on_first_error=True`)
+- Include partial error context in exception message
 
 ### Read Errors
 
