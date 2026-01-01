@@ -34,6 +34,7 @@ df = spark.createDataFrame([
 ], ["id", "name", "age"])
 
 df.write.format("pycassandra") \
+    .mode("append") \
     .option("host", "127.0.0.1") \
     .option("keyspace", "myks") \
     .option("table", "users") \
@@ -55,6 +56,7 @@ df.writeStream.format("pycassandra") \
 
 ```python
 df.write.format("pycassandra") \
+    .mode("append") \
     .option("host", "127.0.0.1") \
     .option("keyspace", "myks") \
     .option("table", "users") \
