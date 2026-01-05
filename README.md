@@ -92,7 +92,8 @@ df = spark.read.format("pycassandra") \
     .option("host", "127.0.0.1") \
     .option("keyspace", "myks") \
     .option("table", "users") \
-    .option("filter", "age >= 18 ALLOW FILTERING") \
+    .option("filter", "age >= 18") \
+    .option("allow_filtering", "true") \
     .load()
 ```
 
@@ -145,7 +146,8 @@ df = spark.read.format("pycassandra") \
 | Option | Required | Default | Description |
 |--------|----------|---------|-------------|
 | `consistency` | No | LOCAL_ONE | Read consistency level |
-| `filter` | No | - | Raw CQL WHERE clause (use ALLOW FILTERING if needed) |
+| `filter` | No | - | Raw CQL WHERE clause for server-side filtering |
+| `allow_filtering` | No | false | Append ALLOW FILTERING to query (use with caution) |
 
 ## Development
 

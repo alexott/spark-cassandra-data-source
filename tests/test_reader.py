@@ -269,7 +269,7 @@ def test_reader_read_with_filter(mock_table_metadata):
         "host": "127.0.0.1",
         "keyspace": "test_ks",
         "table": "test_table",
-        "filter": "age >= 18 ALLOW FILTERING"
+        "filter": "age >= 18"
     }
 
     with patch("cassandra.cluster.Cluster") as mock_cluster:
@@ -304,10 +304,11 @@ def test_reader_read_with_filter(mock_table_metadata):
             # Execute read (consumes iterator to trigger query)
             list(reader.read(partition))
 
-            # Verify query includes filter
+            # Verify query includes filter (but not ALLOW FILTERING)
             call_args = mock_read_session.execute.call_args
             query = call_args[0][0]
-            assert "age >= 18 ALLOW FILTERING" in query
+            assert "age >= 18" in query
+            assert "ALLOW FILTERING" not in query
 
 
 def test_reader_read_returns_tuples_in_schema_order(mock_table_metadata):
@@ -366,3 +367,59 @@ def test_reader_read_returns_tuples_in_schema_order(mock_table_metadata):
             assert isinstance(result[0], tuple)
             # Verify tuple has correct number of elements (4 columns: age, id, name, score)
             assert len(result[0]) == 4
+
+
+def test_reader_read_with_allow_filtering(mock_table_metadata):
+    """Test read() with allow_filtering option appends ALLOW FILTERING at end."""
+    from cassandra_data_source.reader import CassandraReader
+    from cassandra_data_source.partitioning import TokenRangePartition
+
+    options = {
+        "host": "127.0.0.1",
+        "keyspace": "test_ks",
+        "table": "test_table",
+        "filter": "age >= 18",
+        "allow_filtering": "true"
+    }
+
+    with patch("cassandra.cluster.Cluster") as mock_cluster:
+        mock_cluster_instance = MagicMock()
+        mock_session = MagicMock()
+        mock_cluster_instance.connect.return_value = mock_session
+        mock_cluster_instance.metadata.keyspaces = {
+            "test_ks": MagicMock(tables={"test_table": mock_table_metadata})
+        }
+        mock_cluster_instance.metadata.token_ranges.return_value = []
+        mock_cluster.return_value = mock_cluster_instance
+
+        reader = CassandraReader(options, None)
+
+        partition = TokenRangePartition(
+            partition_id=0,
+            start_token="100",
+            end_token="200",
+            pk_columns=["id"],
+            is_wrap_around=False,
+            min_token="-9223372036854775808"
+        )
+
+        with patch("cassandra.cluster.Cluster") as mock_read_cluster:
+            mock_read_cluster_instance = MagicMock()
+            mock_read_session = MagicMock()
+            mock_read_cluster_instance.connect.return_value = mock_read_session
+            mock_read_cluster.return_value = mock_read_cluster_instance
+
+            mock_read_session.execute.return_value = []
+
+            # Execute read (consumes iterator to trigger query)
+            list(reader.read(partition))
+
+            # Verify ALLOW FILTERING is appended at the END (not in brackets)
+            call_args = mock_read_session.execute.call_args
+            query = call_args[0][0]
+            # Should have ALLOW FILTERING at the end
+            assert query.endswith("ALLOW FILTERING")
+            # Should have filter condition
+            assert "age >= 18" in query
+            # ALLOW FILTERING should NOT be in parentheses with the filter
+            assert "(age >= 18 ALLOW FILTERING)" not in query

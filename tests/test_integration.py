@@ -223,7 +223,8 @@ def test_read_with_filter_integration(spark, cassandra_setup):
         .option("port", "9042")
         .option("keyspace", "test_ks")
         .option("table", "test_table")
-        .option("filter", "age >= 30 ALLOW FILTERING")
+        .option("filter", "age >= 30")
+        .option("allow_filtering", "true")
         .load()
     )
 

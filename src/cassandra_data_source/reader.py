@@ -36,6 +36,7 @@ class CassandraReader:
         # Read options
         self.consistency = options.get("consistency", "LOCAL_ONE").upper()
         self.filter = options.get("filter")  # Optional WHERE clause filter
+        self.allow_filtering = options.get("allow_filtering", "false").lower() == "true"
 
         # Load metadata and schema
         self._load_metadata()
@@ -292,6 +293,10 @@ class CassandraReader:
 
             # Build full query
             query = f"SELECT {columns_str} FROM {self.table} WHERE {where_clause}"
+
+            # Append ALLOW FILTERING at the end if requested (must be outside WHERE clause)
+            if self.allow_filtering:
+                query = f"{query} ALLOW FILTERING"
 
             # Execute query with consistency level
             # Note: Consistency level should be set on the session or SimpleStatement
