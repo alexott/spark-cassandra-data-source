@@ -239,7 +239,6 @@ class CassandraReader:
         # Import cassandra-driver on executor (inside the method)
         from cassandra.cluster import Cluster
         from cassandra.auth import PlainTextAuthProvider
-        from cassandra import ConsistencyLevel
         import ssl as ssl_module
 
         # Create cluster connection

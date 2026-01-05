@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+from pyspark.sql.types import StructType, StructField, StringType
 
 
 def test_missing_required_option_host():

@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+from pyspark.sql.types import StructType, StructField, StringType
 
 
 def test_reader_init_validates_options():
@@ -198,8 +198,8 @@ def test_reader_read_with_unbounded_start(mock_table_metadata):
 
             mock_read_session.execute.return_value = []
 
-            # Execute read
-            result = list(reader.read(partition))
+            # Execute read (consumes iterator to trigger query)
+            list(reader.read(partition))
 
             # Verify query was executed with correct WHERE clause
             call_args = mock_read_session.execute.call_args
@@ -249,8 +249,8 @@ def test_reader_read_with_unbounded_end(mock_table_metadata):
 
             mock_read_session.execute.return_value = []
 
-            # Execute read
-            result = list(reader.read(partition))
+            # Execute read (consumes iterator to trigger query)
+            list(reader.read(partition))
 
             # Verify query was executed with correct WHERE clause
             call_args = mock_read_session.execute.call_args
@@ -301,8 +301,8 @@ def test_reader_read_with_filter(mock_table_metadata):
 
             mock_read_session.execute.return_value = []
 
-            # Execute read
-            result = list(reader.read(partition))
+            # Execute read (consumes iterator to trigger query)
+            list(reader.read(partition))
 
             # Verify query includes filter
             call_args = mock_read_session.execute.call_args

@@ -1,8 +1,5 @@
-import pytest
 from pyspark.sql.types import (
-    StructType, StructField, StringType, IntegerType, LongType,
-    FloatType, DoubleType, BooleanType, TimestampType, DateType,
-    BinaryType, DecimalType
+    StructType, StringType, IntegerType, LongType
 )
 from unittest.mock import MagicMock
 
