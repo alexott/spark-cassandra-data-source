@@ -35,21 +35,25 @@ def test_cassandra_to_spark_type_text():
 def test_derive_schema_from_table():
     """Test deriving Spark schema from Cassandra table metadata."""
     from cassandra_data_source.schema import derive_schema_from_table
+    from cassandra import cqltypes
 
     # Mock table metadata
     table_meta = MagicMock()
 
-    # Mock columns
+    # Mock columns with proper type objects
     id_col = MagicMock()
     id_col.name = "id"
+    id_col.type = cqltypes.UUIDType()  # Use actual type object
     id_col.cql_type = "uuid"
 
     name_col = MagicMock()
     name_col.name = "name"
+    name_col.type = cqltypes.UTF8Type()  # Use actual type object
     name_col.cql_type = "text"
 
     age_col = MagicMock()
     age_col.name = "age"
+    age_col.type = cqltypes.Int32Type()  # Use actual type object
     age_col.cql_type = "int"
 
     table_meta.columns = {
@@ -73,20 +77,24 @@ def test_derive_schema_from_table():
 def test_derive_schema_with_column_filter():
     """Test deriving schema with column filtering."""
     from cassandra_data_source.schema import derive_schema_from_table
+    from cassandra import cqltypes
 
     # Mock table metadata
     table_meta = MagicMock()
 
     id_col = MagicMock()
     id_col.name = "id"
+    id_col.type = cqltypes.UUIDType()  # Use actual type object
     id_col.cql_type = "uuid"
 
     name_col = MagicMock()
     name_col.name = "name"
+    name_col.type = cqltypes.UTF8Type()  # Use actual type object
     name_col.cql_type = "text"
 
     age_col = MagicMock()
     age_col.name = "age"
+    age_col.type = cqltypes.Int32Type()  # Use actual type object
     age_col.cql_type = "int"
 
     table_meta.columns = {
