@@ -128,8 +128,12 @@ class CassandraReader:
         """
         Return list of partitions for parallel reading.
 
-        Returns one partition per Cassandra token range following
-        the TokenRangesScan.java pattern.
+        Follows the TokenRangesScan.java pattern which creates different queries
+        depending on the token range position. Some ranges may generate multiple
+        partitions (e.g., first range creates two partitions).
+
+        Returns:
+            List of TokenRangePartition objects, one per query
         """
         if not self.token_ranges:
             # Empty table or no token ranges
@@ -137,9 +141,11 @@ class CassandraReader:
 
         partitions = []
         sorted_ranges = sorted(self.token_ranges)
+        partition_id = 0
 
-        # Get min token for wrap-around handling
-        min_token = sorted_ranges[0].start if sorted_ranges else None
+        # Get min token for wrap-around handling (first range's start token)
+        min_token_obj = sorted_ranges[0].start
+        min_token = min_token_obj.value if hasattr(min_token_obj, 'value') else str(min_token_obj)
 
         for i, token_range in enumerate(sorted_ranges):
             start = token_range.start
@@ -149,19 +155,74 @@ class CassandraReader:
             start_value = start.value if hasattr(start, 'value') else str(start)
             end_value = end.value if hasattr(end, 'value') else str(end)
 
-            # Determine if this is a wrap-around range
-            # Following TokenRangesScan.java: wrap-around occurs when start == end
-            is_wrap_around = (start_value == end_value)
+            # Following TokenRangesScan.java logic:
+            if start_value == end_value:
+                # Case 1: Degenerate single-node cluster (entire ring)
+                # Query: token >= minToken
+                partition = TokenRangePartition(
+                    partition_id=partition_id,
+                    start_token=min_token,
+                    end_token=None,  # Unbounded
+                    pk_columns=self.pk_columns,
+                    is_wrap_around=True,
+                    min_token=min_token
+                )
+                partitions.append(partition)
+                partition_id += 1
 
-            partition = TokenRangePartition(
-                partition_id=i,
-                start_token=start_value,
-                end_token=end_value,
-                pk_columns=self.pk_columns,
-                is_wrap_around=is_wrap_around
-            )
+            elif i == 0:
+                # Case 2: First range - split into TWO partitions
+                # Query 1: token <= minToken (wrap-around portion)
+                partition1 = TokenRangePartition(
+                    partition_id=partition_id,
+                    start_token=None,  # Unbounded
+                    end_token=min_token,
+                    pk_columns=self.pk_columns,
+                    is_wrap_around=True,
+                    min_token=min_token
+                )
+                partitions.append(partition1)
+                partition_id += 1
 
-            partitions.append(partition)
+                # Query 2: token > start AND token <= end (normal portion)
+                partition2 = TokenRangePartition(
+                    partition_id=partition_id,
+                    start_token=start_value,
+                    end_token=end_value,
+                    pk_columns=self.pk_columns,
+                    is_wrap_around=False,
+                    min_token=min_token
+                )
+                partitions.append(partition2)
+                partition_id += 1
+
+            elif end_value == min_token:
+                # Case 3: Range ending at minToken
+                # Query: token > start (no upper bound)
+                partition = TokenRangePartition(
+                    partition_id=partition_id,
+                    start_token=start_value,
+                    end_token=None,  # Unbounded
+                    pk_columns=self.pk_columns,
+                    is_wrap_around=False,
+                    min_token=min_token
+                )
+                partitions.append(partition)
+                partition_id += 1
+
+            else:
+                # Case 4: Normal range
+                # Query: token > start AND token <= end
+                partition = TokenRangePartition(
+                    partition_id=partition_id,
+                    start_token=start_value,
+                    end_token=end_value,
+                    pk_columns=self.pk_columns,
+                    is_wrap_around=False,
+                    min_token=min_token
+                )
+                partitions.append(partition)
+                partition_id += 1
 
         return partitions
 

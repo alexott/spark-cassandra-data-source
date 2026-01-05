@@ -11,7 +11,8 @@ def test_token_range_partition_creation():
         start_token="100",
         end_token="200",
         pk_columns=["id"],
-        is_wrap_around=False
+        is_wrap_around=False,
+        min_token="50"
     )
 
     assert partition.partition_id == 0
@@ -19,22 +20,27 @@ def test_token_range_partition_creation():
     assert partition.end_token == "200"
     assert partition.pk_columns == ["id"]
     assert partition.is_wrap_around is False
+    assert partition.min_token == "50"
 
 
 def test_token_range_partition_equality():
     """Test partition equality comparison."""
     from cassandra_data_source.partitioning import TokenRangePartition
 
-    p1 = TokenRangePartition(0, "100", "200", ["id"], False)
-    p2 = TokenRangePartition(0, "100", "200", ["id"], False)
-    p3 = TokenRangePartition(1, "200", "300", ["id"], False)
+    p1 = TokenRangePartition(0, "100", "200", ["id"], False, "50")
+    p2 = TokenRangePartition(0, "100", "200", ["id"], False, "50")
+    p3 = TokenRangePartition(1, "200", "300", ["id"], False, "50")
 
     assert p1 == p2
     assert p1 != p3
 
 
 def test_reader_creates_partitions_from_token_ranges(mock_table_metadata):
-    """Test reader creates one partition per token range."""
+    """Test reader creates partitions following TokenRangesScan.java pattern.
+
+    The first range gets split into TWO partitions (wrap-around + normal),
+    subsequent ranges get ONE partition each.
+    """
     from cassandra_data_source.reader import CassandraReader
     from cassandra_data_source.partitioning import TokenRangePartition
 
@@ -75,20 +81,31 @@ def test_reader_creates_partitions_from_token_ranges(mock_table_metadata):
         reader = CassandraReader(options, None)
         partitions = reader.partitions()
 
-        # Should have 2 partitions (one per token range)
-        assert len(partitions) == 2
+        # Should have 3 partitions: first range splits into 2, second range is 1
+        assert len(partitions) == 3
         assert all(isinstance(p, TokenRangePartition) for p in partitions)
 
-        # Verify partition properties
+        # Partition 0: Wrap-around portion (token <= minToken)
         assert partitions[0].partition_id == 0
-        assert partitions[0].start_token == "100"
-        assert partitions[0].end_token == "200"
+        assert partitions[0].start_token is None  # Unbounded
+        assert partitions[0].end_token == "100"
         assert partitions[0].pk_columns == ["id"]
+        assert partitions[0].is_wrap_around is True
+        assert partitions[0].min_token == "100"
 
+        # Partition 1: Normal portion of first range (token > 100 AND token <= 200)
         assert partitions[1].partition_id == 1
-        assert partitions[1].start_token == "200"
-        assert partitions[1].end_token == "300"
+        assert partitions[1].start_token == "100"
+        assert partitions[1].end_token == "200"
         assert partitions[1].pk_columns == ["id"]
+        assert partitions[1].is_wrap_around is False
+
+        # Partition 2: Second range (token > 200 AND token <= 300)
+        assert partitions[2].partition_id == 2
+        assert partitions[2].start_token == "200"
+        assert partitions[2].end_token == "300"
+        assert partitions[2].pk_columns == ["id"]
+        assert partitions[2].is_wrap_around is False
 
 
 def test_reader_handles_empty_token_ranges(mock_table_metadata):
@@ -119,7 +136,11 @@ def test_reader_handles_empty_token_ranges(mock_table_metadata):
 
 
 def test_reader_detects_wrap_around_range(mock_table_metadata):
-    """Test reader correctly identifies wrap-around token range."""
+    """Test reader correctly handles degenerate single-node case.
+
+    When start == end (entire ring), creates one partition with
+    query: token >= minToken.
+    """
     from cassandra_data_source.reader import CassandraReader
 
     options = {
@@ -128,7 +149,7 @@ def test_reader_detects_wrap_around_range(mock_table_metadata):
         "table": "test_table"
     }
 
-    # Mock wrap-around range (start == end)
+    # Mock degenerate range (start == end) - single node cluster
     wrap_range = MagicMock()
     wrap_range.start = MagicMock()
     wrap_range.start.value = -9223372036854775808  # Min token
@@ -149,5 +170,8 @@ def test_reader_detects_wrap_around_range(mock_table_metadata):
         partitions = reader.partitions()
 
         # Should have 1 partition marked as wrap-around
+        # Query will be: token >= minToken (unbounded end)
         assert len(partitions) == 1
         assert partitions[0].is_wrap_around is True
+        assert partitions[0].start_token == "-9223372036854775808"
+        assert partitions[0].end_token is None  # Unbounded
