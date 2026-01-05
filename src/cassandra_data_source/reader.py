@@ -228,7 +228,7 @@ class CassandraReader:
 
     def read(self, partition):
         """
-        Read data from a partition.
+        Read data from a partition using token range query.
 
         Args:
             partition: TokenRangePartition to read
@@ -236,8 +236,78 @@ class CassandraReader:
         Yields:
             Tuples representing rows
         """
-        # This will be implemented in Task 5
-        raise NotImplementedError("read() will be implemented in Task 5")
+        # Import cassandra-driver on executor (inside the method)
+        from cassandra.cluster import Cluster
+        from cassandra.auth import PlainTextAuthProvider
+        from cassandra import ConsistencyLevel
+        import ssl as ssl_module
+
+        # Create cluster connection
+        kwargs = {
+            "contact_points": [self.host],
+            "port": self.port
+        }
+
+        # Add authentication if provided
+        if self.username and self.password:
+            kwargs["auth_provider"] = PlainTextAuthProvider(
+                username=self.username,
+                password=self.password
+            )
+
+        # Add SSL if enabled
+        if self.ssl_enabled:
+            ssl_context = ssl_module.create_default_context()
+            if self.ssl_ca_cert:
+                ssl_context.load_verify_locations(self.ssl_ca_cert)
+            kwargs["ssl_context"] = ssl_context
+
+        cluster = Cluster(**kwargs)
+
+        try:
+            session = cluster.connect(self.keyspace)
+
+            # Build SELECT clause with columns
+            columns_str = ", ".join(self.columns)
+
+            # Build WHERE clause with token range
+            pk_cols_str = ", ".join(partition.pk_columns)
+
+            # Build token range condition based on partition properties
+            if partition.start_token is None:
+                # Unbounded start: token(pk) <= end_token
+                where_clause = f"token({pk_cols_str}) <= {partition.end_token}"
+            elif partition.end_token is None:
+                # Unbounded end: token(pk) > start_token
+                where_clause = f"token({pk_cols_str}) > {partition.start_token}"
+            else:
+                # Both bounds present: token(pk) > start_token AND token(pk) <= end_token
+                where_clause = (
+                    f"token({pk_cols_str}) > {partition.start_token} AND "
+                    f"token({pk_cols_str}) <= {partition.end_token}"
+                )
+
+            # Add optional filter with AND if present
+            if self.filter:
+                where_clause = f"({where_clause}) AND ({self.filter})"
+
+            # Build full query
+            query = f"SELECT {columns_str} FROM {self.table} WHERE {where_clause}"
+
+            # Execute query with consistency level
+            # Note: Consistency level should be set on the session or SimpleStatement
+            # For now, we execute directly (can be enhanced later with SimpleStatement)
+            result_set = session.execute(query)
+
+            # Yield rows as tuples matching schema order
+            for row in result_set:
+                # Convert row to tuple matching schema column order
+                values = tuple(row[col] for col in self.columns)
+                yield values
+
+        finally:
+            # Always close connection
+            cluster.shutdown()
 
 
 class CassandraBatchReader(CassandraReader, DataSourceReader):
