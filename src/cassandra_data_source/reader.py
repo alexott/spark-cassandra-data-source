@@ -24,7 +24,9 @@ class CassandraReader:
         self._validate_options()
 
         # Extract connection options
-        self.host = options["host"]
+        # Support comma-separated list of hosts for fault tolerance
+        host_str = options["host"]
+        self.hosts = [h.strip() for h in host_str.split(",")]
         self.port = int(options.get("port", 9042))
         self.keyspace = options["keyspace"]
         self.table = options["table"]
@@ -58,7 +60,7 @@ class CassandraReader:
 
         # Create cluster connection
         kwargs = {
-            "contact_points": [self.host],
+            "contact_points": self.hosts,
             "port": self.port
         }
 
@@ -244,7 +246,7 @@ class CassandraReader:
 
         # Create cluster connection
         kwargs = {
-            "contact_points": [self.host],
+            "contact_points": self.hosts,
             "port": self.port
         }
 

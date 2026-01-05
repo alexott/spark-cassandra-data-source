@@ -38,7 +38,7 @@ def test_reader_init_with_valid_options(mock_table_metadata):
 
         reader = CassandraReader(options, schema)
 
-        assert reader.host == "127.0.0.1"
+        assert reader.hosts == ["127.0.0.1"]
         assert reader.keyspace == "test_ks"
         assert reader.table == "test_table"
 
@@ -367,6 +367,35 @@ def test_reader_read_returns_tuples_in_schema_order(mock_table_metadata):
             assert isinstance(result[0], tuple)
             # Verify tuple has correct number of elements (4 columns: age, id, name, score)
             assert len(result[0]) == 4
+
+
+def test_reader_comma_separated_hosts(mock_table_metadata):
+    """Test reader parses comma-separated hosts correctly."""
+    from cassandra_data_source.reader import CassandraReader
+
+    options = {
+        "host": "host1.example.com, host2.example.com,  host3.example.com",
+        "keyspace": "test_ks",
+        "table": "test_table"
+    }
+
+    with patch("cassandra.cluster.Cluster") as mock_cluster:
+        mock_cluster_instance = MagicMock()
+        mock_session = MagicMock()
+        mock_cluster_instance.connect.return_value = mock_session
+        mock_cluster_instance.metadata.keyspaces = {
+            "test_ks": MagicMock(tables={"test_table": mock_table_metadata})
+        }
+        mock_cluster_instance.metadata.token_ranges.return_value = []
+        mock_cluster.return_value = mock_cluster_instance
+
+        reader = CassandraReader(options, None)
+
+        # Verify hosts were parsed correctly (whitespace stripped)
+        assert reader.hosts == ["host1.example.com", "host2.example.com", "host3.example.com"]
+
+        # Verify connection would be created with all hosts
+        assert mock_cluster.call_args[1]["contact_points"] == reader.hosts
 
 
 def test_reader_read_with_allow_filtering(mock_table_metadata):

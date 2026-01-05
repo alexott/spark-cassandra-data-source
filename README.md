@@ -74,9 +74,16 @@ from cassandra_data_source import CassandraDataSource
 spark = SparkSession.builder.appName("pycassandra").getOrCreate()
 spark.dataSource.register(CassandraDataSource)
 
-# Read entire table
+# Read entire table (single host)
 df = spark.read.format("pycassandra") \
     .option("host", "127.0.0.1") \
+    .option("keyspace", "myks") \
+    .option("table", "users") \
+    .load()
+
+# Or with multiple hosts for fault tolerance
+df = spark.read.format("pycassandra") \
+    .option("host", "host1.example.com,host2.example.com,host3.example.com") \
     .option("keyspace", "myks") \
     .option("table", "users") \
     .load()
@@ -122,7 +129,7 @@ df = spark.read.format("pycassandra") \
 
 | Option | Required | Default | Description |
 |--------|----------|---------|-------------|
-| `host` | Yes | - | Cassandra contact point |
+| `host` | Yes | - | Cassandra contact point(s) - single host or comma-separated list |
 | `port` | No | 9042 | Cassandra port |
 | `keyspace` | Yes | - | Target keyspace |
 | `table` | Yes | - | Target table |
