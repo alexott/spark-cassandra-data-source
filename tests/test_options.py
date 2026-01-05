@@ -1,5 +1,6 @@
 import pytest
-from pyspark.sql.types import StructType, StructField, StringType
+from unittest.mock import patch, MagicMock
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 
 
 def test_missing_required_option_host():
@@ -187,3 +188,69 @@ def test_valid_consistency_levels():
 
         # Should not raise an error and should store the consistency level
         assert writer.consistency == level
+
+
+def test_data_source_reader_method(mock_table_metadata):
+    """Test that reader() returns a CassandraBatchReader instance."""
+    from cassandra_data_source import CassandraDataSource, CassandraBatchReader
+
+    options = {
+        "host": "127.0.0.1",
+        "keyspace": "test_ks",
+        "table": "test_table"
+    }
+    # Use columns that match the mock_table_metadata fixture
+    schema = StructType([
+        StructField("id", StringType()),
+        StructField("name", StringType())
+    ])
+
+    ds = CassandraDataSource(options)
+
+    # Mock the Cassandra connection in CassandraReader._load_metadata
+    with patch("cassandra.cluster.Cluster") as mock_cluster:
+        mock_cluster_instance = MagicMock()
+        mock_cluster.return_value = mock_cluster_instance
+        mock_cluster_instance.metadata.keyspaces = {
+            "test_ks": MagicMock(tables={"test_table": mock_table_metadata})
+        }
+        mock_cluster_instance.metadata.token_ranges.return_value = []
+
+        reader = ds.reader(schema)
+
+        assert isinstance(reader, CassandraBatchReader)
+        assert reader.user_schema == schema
+
+
+def test_data_source_schema_method(mock_table_metadata):
+    """Test that schema() returns the derived schema."""
+    from cassandra_data_source import CassandraDataSource
+
+    options = {
+        "host": "127.0.0.1",
+        "keyspace": "test_ks",
+        "table": "test_table"
+    }
+
+    ds = CassandraDataSource(options)
+
+    # Mock the Cassandra connection in CassandraReader._load_metadata
+    with patch("cassandra.cluster.Cluster") as mock_cluster:
+        mock_cluster_instance = MagicMock()
+        mock_cluster.return_value = mock_cluster_instance
+        mock_cluster_instance.metadata.keyspaces = {
+            "test_ks": MagicMock(tables={"test_table": mock_table_metadata})
+        }
+        mock_cluster_instance.metadata.token_ranges.return_value = []
+
+        schema = ds.schema()
+
+        # Verify schema is a StructType
+        assert isinstance(schema, StructType)
+        # Verify it has the expected fields from mock_table_metadata (4 columns)
+        assert len(schema.fields) == 4
+        field_names = [f.name for f in schema.fields]
+        assert "id" in field_names
+        assert "name" in field_names
+        assert "age" in field_names
+        assert "score" in field_names

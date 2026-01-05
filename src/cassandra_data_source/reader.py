@@ -2,7 +2,7 @@
 
 from pyspark.sql.datasource import DataSourceReader
 
-from .partitioning import TokenRangePartition
+from .partitioning import TokenRangePartition  # noqa: F401 - used in Task 4
 from .schema import derive_schema_from_table
 
 
@@ -78,7 +78,8 @@ class CassandraReader:
         cluster = Cluster(**kwargs)
 
         try:
-            session = cluster.connect()
+            # Connect to populate metadata (session not needed)
+            cluster.connect()
 
             # Get table metadata
             table_meta = cluster.metadata.keyspaces[self.keyspace].tables[self.table]
