@@ -65,6 +65,56 @@ df.write.format("pycassandra") \
     .save()
 ```
 
+### Batch Read
+
+```python
+from pyspark.sql import SparkSession
+from cassandra_data_source import CassandraDataSource
+
+spark = SparkSession.builder.appName("pycassandra").getOrCreate()
+spark.dataSource.register(CassandraDataSource)
+
+# Read entire table
+df = spark.read.format("pycassandra") \
+    .option("host", "127.0.0.1") \
+    .option("keyspace", "myks") \
+    .option("table", "users") \
+    .load()
+
+df.show()
+```
+
+### Read with Filter
+
+```python
+# Apply server-side filter
+df = spark.read.format("pycassandra") \
+    .option("host", "127.0.0.1") \
+    .option("keyspace", "myks") \
+    .option("table", "users") \
+    .option("filter", "age >= 18 ALLOW FILTERING") \
+    .load()
+```
+
+### Read with Schema (Column Projection)
+
+```python
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+
+schema = StructType([
+    StructField("id", StringType()),
+    StructField("name", StringType()),
+    StructField("age", IntegerType())
+])
+
+df = spark.read.format("pycassandra") \
+    .schema(schema) \
+    .option("host", "127.0.0.1") \
+    .option("keyspace", "myks") \
+    .option("table", "users") \
+    .load()
+```
+
 ## Configuration Options
 
 ### Connection Options
@@ -89,6 +139,13 @@ df.write.format("pycassandra") \
 | `consistency` | No | LOCAL_QUORUM | Write consistency level (ONE, TWO, THREE, QUORUM, ALL, LOCAL_QUORUM, EACH_QUORUM, LOCAL_ONE) |
 | `delete_flag_column` | No | - | Column indicating deletion (must be used with delete_flag_value) |
 | `delete_flag_value` | No | - | Value triggering deletion (must be used with delete_flag_column) |
+
+### Read Options
+
+| Option | Required | Default | Description |
+|--------|----------|---------|-------------|
+| `consistency` | No | LOCAL_ONE | Read consistency level |
+| `filter` | No | - | Raw CQL WHERE clause (use ALLOW FILTERING if needed) |
 
 ## Development
 
@@ -122,16 +179,35 @@ poetry run mypy src/
 
 See [Design Document](docs/plans/2025-12-29-pycassandra-design.md) for comprehensive architecture and implementation details.
 
-## Phase 1 Status
+## Phase Status
 
-- [x] Batch writes
-- [x] Streaming writes
-- [x] Connection management (host, port, auth, SSL)
-- [x] Primary key validation
-- [x] Type conversion (String <-> UUID, Int <-> BigInt)
-- [x] Delete flag support
-- [ ] Batch reads (Phase 3)
-- [ ] Streaming reads (Phase 4)
+### Phase 1: Write Operations ✅
+
+**Status:** COMPLETE
+
+- ✅ Batch writes
+- ✅ Streaming writes
+- ✅ Connection management (host, port, auth, SSL)
+- ✅ Primary key validation
+- ✅ Type conversion (String <-> UUID, Int <-> BigInt)
+- ✅ Delete flag support
+
+### Phase 2: Batch Read Operations ✅
+
+**Status:** COMPLETE
+
+- ✅ Token range-based partitioning
+- ✅ Schema derivation from Cassandra metadata
+- ✅ Explicit schema support (column projection)
+- ✅ Optional filter expressions
+- ✅ Connection management
+- ✅ Integration tests
+
+### Phase 3: Streaming Reads (Future)
+
+- [ ] CDC-based streaming reads
+- [ ] Change event processing
+- [ ] Offset management
 
 ## License
 
