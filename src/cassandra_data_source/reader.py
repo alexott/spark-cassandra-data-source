@@ -128,10 +128,42 @@ class CassandraReader:
         """
         Return list of partitions for parallel reading.
 
-        Returns one partition per Cassandra token range.
+        Returns one partition per Cassandra token range following
+        the TokenRangesScan.java pattern.
         """
-        # This will be implemented in Task 4
-        raise NotImplementedError("partitions() will be implemented in Task 4")
+        if not self.token_ranges:
+            # Empty table or no token ranges
+            return []
+
+        partitions = []
+        sorted_ranges = sorted(self.token_ranges)
+
+        # Get min token for wrap-around handling
+        min_token = sorted_ranges[0].start if sorted_ranges else None
+
+        for i, token_range in enumerate(sorted_ranges):
+            start = token_range.start
+            end = token_range.end
+
+            # Extract token values
+            start_value = start.value if hasattr(start, 'value') else str(start)
+            end_value = end.value if hasattr(end, 'value') else str(end)
+
+            # Determine if this is a wrap-around range
+            # Following TokenRangesScan.java: wrap-around occurs when start == end
+            is_wrap_around = (start_value == end_value)
+
+            partition = TokenRangePartition(
+                partition_id=i,
+                start_token=start_value,
+                end_token=end_value,
+                pk_columns=self.pk_columns,
+                is_wrap_around=is_wrap_around
+            )
+
+            partitions.append(partition)
+
+        return partitions
 
     def read(self, partition):
         """
