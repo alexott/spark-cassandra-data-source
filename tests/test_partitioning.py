@@ -37,8 +37,10 @@ def test_token_range_partition_equality():
 def test_reader_creates_partitions_from_token_ranges(mock_table_metadata):
     """Test reader creates partitions following TokenRangesScan.java pattern.
 
-    The first range gets split into TWO partitions (wrap-around + normal),
-    subsequent ranges get ONE partition each.
+    With a 2-token ring, creates:
+    - First range splits into TWO partitions (wrap-around + normal)
+    - Second range (wrapping) creates ONE partition
+    Total: 3 partitions
     """
     from cassandra_data_source.reader import CassandraReader
     from cassandra_data_source.partitioning import TokenRangePartition
@@ -49,23 +51,22 @@ def test_reader_creates_partitions_from_token_ranges(mock_table_metadata):
         "table": "test_table"
     }
 
-    # Mock token ranges (need to be sortable)
-    range1 = MagicMock()
-    range1.start = MagicMock()
-    range1.start.value = 100
-    range1.end = MagicMock()
-    range1.end.value = 200
-    # Make sortable by implementing comparison
-    range1.__lt__ = lambda self, other: self.start.value < other.start.value
-    range1.__eq__ = lambda self, other: self.start.value == other.start.value
+    # Mock token objects (need to be sortable)
+    token1 = MagicMock()
+    token1.value = 100
+    token1.__lt__ = lambda self, other: self.value < other.value
+    token1.__le__ = lambda self, other: self.value <= other.value
+    token1.__gt__ = lambda self, other: self.value > other.value
+    token1.__ge__ = lambda self, other: self.value >= other.value
+    token1.__eq__ = lambda self, other: self.value == other.value
 
-    range2 = MagicMock()
-    range2.start = MagicMock()
-    range2.start.value = 200
-    range2.end = MagicMock()
-    range2.end.value = 300
-    range2.__lt__ = lambda self, other: self.start.value < other.start.value
-    range2.__eq__ = lambda self, other: self.start.value == other.start.value
+    token2 = MagicMock()
+    token2.value = 200
+    token2.__lt__ = lambda self, other: self.value < other.value
+    token2.__le__ = lambda self, other: self.value <= other.value
+    token2.__gt__ = lambda self, other: self.value > other.value
+    token2.__ge__ = lambda self, other: self.value >= other.value
+    token2.__eq__ = lambda self, other: self.value == other.value
 
     with patch("cassandra.cluster.Cluster") as mock_cluster:
         mock_cluster_instance = MagicMock()
@@ -74,7 +75,10 @@ def test_reader_creates_partitions_from_token_ranges(mock_table_metadata):
         mock_cluster_instance.metadata.keyspaces = {
             "test_ks": MagicMock(tables={"test_table": mock_table_metadata})
         }
-        mock_cluster_instance.metadata.token_ranges.return_value = [range1, range2]
+        # Mock token_map with ring attribute containing token objects
+        mock_token_map = MagicMock()
+        mock_token_map.ring = [token1, token2]
+        mock_cluster_instance.metadata.token_map = mock_token_map
         mock_cluster.return_value = mock_cluster_instance
 
         reader = CassandraReader(options, None)
@@ -99,10 +103,11 @@ def test_reader_creates_partitions_from_token_ranges(mock_table_metadata):
         assert partitions[1].pk_columns == ["id"]
         assert partitions[1].is_wrap_around is False
 
-        # Partition 2: Second range (token > 200 AND token <= 300)
+        # Partition 2: Second range wraps to minToken (token > 200)
+        # Since it ends at minToken=100, end_token is None
         assert partitions[2].partition_id == 2
         assert partitions[2].start_token == "200"
-        assert partitions[2].end_token == "300"
+        assert partitions[2].end_token is None  # Unbounded (wraps to minToken)
         assert partitions[2].pk_columns == ["id"]
         assert partitions[2].is_wrap_around is False
 
@@ -124,7 +129,10 @@ def test_reader_handles_empty_token_ranges(mock_table_metadata):
         mock_cluster_instance.metadata.keyspaces = {
             "test_ks": MagicMock(tables={"test_table": mock_table_metadata})
         }
-        mock_cluster_instance.metadata.token_ranges.return_value = []
+        # Mock empty token_map
+        mock_token_map = MagicMock()
+        mock_token_map.ring = []
+        mock_cluster_instance.metadata.token_map = mock_token_map
         mock_cluster.return_value = mock_cluster_instance
 
         reader = CassandraReader(options, None)
@@ -162,7 +170,10 @@ def test_reader_detects_wrap_around_range(mock_table_metadata):
         mock_cluster_instance.metadata.keyspaces = {
             "test_ks": MagicMock(tables={"test_table": mock_table_metadata})
         }
-        mock_cluster_instance.metadata.token_ranges.return_value = [wrap_range]
+        # Mock token_map with single node ring (wrap-around case)
+        mock_token_map = MagicMock()
+        mock_token_map.ring = [wrap_range.start]
+        mock_cluster_instance.metadata.token_map = mock_token_map
         mock_cluster.return_value = mock_cluster_instance
 
         reader = CassandraReader(options, None)
