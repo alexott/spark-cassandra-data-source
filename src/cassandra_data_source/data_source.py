@@ -32,7 +32,7 @@ class CassandraDataSource(DataSource):
         """Return a batch reader instance."""
         return CassandraBatchReader(self.options, schema)
 
-    def writer(self, schema, save_mode):
+    def writer(self, schema, overwrite):
         """Return a batch writer instance."""
         return CassandraBatchWriter(self.options, schema)
 
