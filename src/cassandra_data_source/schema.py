@@ -198,8 +198,8 @@ def derive_schema_from_table(table_metadata, columns=None):
             raise ValueError(f"Column '{col_name}' not found in table")
 
         col_meta = table_metadata.columns[col_name]
-        # Use col_meta.type (type object) instead of col_meta.cql_type (string)
-        spark_type = cassandra_to_spark_type(col_meta.type)
+        # Use col_meta.cql_type (string representation of type)
+        spark_type = cassandra_to_spark_type(col_meta.cql_type)
 
         # All columns nullable in Spark (Cassandra allows nulls except in PKs)
         fields.append(StructField(col_name, spark_type, nullable=True))

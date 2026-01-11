@@ -6,6 +6,75 @@ from .partitioning import TokenRangePartition  # noqa: F401 - used in Task 4
 from .schema import derive_schema_from_table
 
 
+def _convert_cassandra_value(value):
+    """
+    Convert Cassandra-specific types to Python native types.
+
+    Args:
+        value: Value from Cassandra row
+
+    Returns:
+        Converted value suitable for Spark
+    """
+    if value is None:
+        return None
+
+    # Import here to avoid module-level dependency
+    from cassandra.util import (
+        Date, Time, Duration, OrderedMap, SortedSet,
+        Point, LineString, Polygon, Distance, DateRange
+    )
+    import uuid
+    import ipaddress
+
+    # Convert Cassandra Date to Python date
+    if isinstance(value, Date):
+        return value.date()
+
+    # Convert Cassandra Time to long (nanoseconds) to match LongType schema
+    if isinstance(value, Time):
+        return value.nanosecond  # Fixed: use nanosecond not nanoseconds
+
+    # Convert UUID to string
+    if isinstance(value, uuid.UUID):
+        return str(value)
+
+    # Convert Duration to dict
+    if isinstance(value, Duration):
+        return {
+            "months": value.months,
+            "days": value.days,
+            "nanoseconds": value.nanoseconds
+        }
+
+    # Convert OrderedMap to dict
+    if isinstance(value, OrderedMap):
+        return dict(value)
+
+    # Convert SortedSet to list
+    if isinstance(value, SortedSet):
+        return list(value)
+
+    # Convert IP addresses to string
+    if isinstance(value, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
+        return str(value)
+
+    # Convert geospatial types to string
+    if isinstance(value, (Point, LineString, Polygon)):
+        return str(value)
+
+    # Convert Distance to float
+    if isinstance(value, Distance):
+        return float(value)
+
+    # Convert DateRange to string
+    if isinstance(value, DateRange):
+        return str(value)
+
+    # Pass through all other types (int, str, float, bool, bytes, Decimal, etc.)
+    return value
+
+
 class CassandraReader:
     """Base reader class for Cassandra data sources."""
 
@@ -109,10 +178,38 @@ class CassandraReader:
                 self.columns = [field.name for field in self.schema.fields]
 
             # Get token ranges for partitioning
-            self.token_ranges = list(cluster.metadata.token_ranges())
+            # Compute ranges from the token ring
+            self.token_ranges = self._get_token_ranges(cluster.metadata.token_map)
 
         finally:
             cluster.shutdown()
+
+    def _get_token_ranges(self, token_map):
+        """
+        Compute token ranges from the token map.
+
+        Args:
+            token_map: Cassandra TokenMap object
+
+        Returns:
+            List of TokenRange objects (namedtuples with start/end)
+        """
+        from collections import namedtuple
+
+        if not token_map or not token_map.ring:
+            return []
+
+        TokenRange = namedtuple('TokenRange', ['start', 'end'])
+        ranges = []
+        ring = sorted(token_map.ring)
+
+        # Create ranges between consecutive tokens
+        for i in range(len(ring)):
+            start = ring[i]
+            end = ring[(i + 1) % len(ring)]  # Wrap around to first token
+            ranges.append(TokenRange(start=start, end=end))
+
+        return ranges
 
     def _validate_user_schema(self, table_meta):
         """Validate user-provided schema matches table structure."""
@@ -308,7 +405,9 @@ class CassandraReader:
             # Yield rows as tuples matching schema order
             for row in result_set:
                 # Convert row to tuple matching schema column order
-                values = tuple(row[col] for col in self.columns)
+                # Row is a namedtuple, access attributes by name
+                # Convert Cassandra types to Python types
+                values = tuple(_convert_cassandra_value(getattr(row, col)) for col in self.columns)
                 yield values
 
         finally:
