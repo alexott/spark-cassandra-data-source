@@ -50,6 +50,8 @@ def mock_table_metadata():
     pk_col.name = "id"
     table_meta.primary_key = [pk_col]
     table_meta.partition_key = [pk_col]  # For reader.py line 90
+    table_meta.clustering_key = []  # No clustering columns
+    table_meta.indexes = {}  # No indexes
 
     # Mock column types
     id_col = MagicMock()

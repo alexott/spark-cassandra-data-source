@@ -6,6 +6,8 @@ Python Data Source for Apache Spark enabling batch and streaming reads/writes to
 
 - **Batch Writes**: Write DataFrames to Cassandra tables with concurrent execution
 - **Streaming Writes**: Write streaming DataFrames with micro-batch processing
+- **Batch Reads**: Read entire tables with token-range partitioning for parallelism
+- **Filter Pushdown** (Spark 4.1+): Automatic predicate pushdown to Cassandra for improved performance
 - **Type Conversion**: Automatic type mapping with validation (String <-> UUID, etc.)
 - **Delete Flag Support**: Conditional row deletion during writes
 - **SSL/TLS**: Secure connections to production clusters
@@ -155,6 +157,8 @@ df = spark.read.format("pycassandra") \
 | `consistency` | No | LOCAL_ONE | Read consistency level |
 | `filter` | No | - | Raw CQL WHERE clause for server-side filtering |
 | `allow_filtering` | No | false | Append ALLOW FILTERING to query (use with caution) |
+
+**Note**: In Spark 4.1+, filters specified via DataFrame API (`.filter()`) are automatically pushed down to Cassandra when supported. See [Filter Pushdown Documentation](docs/filter-pushdown.md) for details.
 
 ## Development
 
