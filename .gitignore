@@ -1,2 +1,5 @@
 dist/
 .coverage
+/cov.xml
+/pytest-coverage.txt
+/test-unit.xml
