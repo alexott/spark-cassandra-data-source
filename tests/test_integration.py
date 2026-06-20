@@ -4,7 +4,7 @@ Integration tests requiring a running Cassandra instance.
 To run these tests:
 1. Start Cassandra: cd tests && docker-compose up -d
 2. Wait for ready: docker-compose exec cassandra cqlsh -e "describe keyspaces"
-3. Run tests: poetry run pytest tests/test_integration.py -v
+3. Run tests: uv run pytest tests/test_integration.py -v
 4. Stop Cassandra: cd tests && docker-compose down
 """
 

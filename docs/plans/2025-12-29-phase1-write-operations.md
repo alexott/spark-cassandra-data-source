@@ -202,7 +202,7 @@ def test_default_port():
 
 **Step 3: Run tests to verify they fail**
 
-Run: `poetry run pytest tests/test_options.py -v`
+Run: `uv run pytest tests/test_options.py -v`
 
 Expected: FAIL with "ModuleNotFoundError: No module named 'cassandra_data_source'"
 
@@ -234,7 +234,7 @@ def test_data_source_name():
 
 **Step 2: Run test to verify it fails**
 
-Run: `poetry run pytest tests/test_options.py::test_data_source_name -v`
+Run: `uv run pytest tests/test_options.py::test_data_source_name -v`
 
 Expected: FAIL with "AttributeError: type object 'CassandraDataSource' has no attribute 'name'"
 
@@ -405,7 +405,7 @@ __all__ = ["CassandraDataSource"]
 
 **Step 4: Run tests to verify they pass**
 
-Run: `poetry run pytest tests/test_options.py -v`
+Run: `uv run pytest tests/test_options.py -v`
 
 Expected: PASS (all tests should pass)
 
@@ -495,7 +495,7 @@ def test_none_value():
 
 **Step 2: Run tests to verify they fail**
 
-Run: `poetry run pytest tests/test_type_conversion.py -v`
+Run: `uv run pytest tests/test_type_conversion.py -v`
 
 Expected: FAIL with "ImportError: cannot import name 'convert_value'"
 
@@ -566,7 +566,7 @@ __all__ = ["CassandraDataSource", "convert_value"]
 
 **Step 4: Run tests to verify they pass**
 
-Run: `poetry run pytest tests/test_type_conversion.py -v`
+Run: `uv run pytest tests/test_type_conversion.py -v`
 
 Expected: PASS (all tests should pass)
 
@@ -711,7 +711,7 @@ def test_write_type_conversion(basic_options, sample_schema, mock_cassandra_clus
 
 **Step 2: Run tests to verify they fail**
 
-Run: `poetry run pytest tests/test_writer.py -v`
+Run: `uv run pytest tests/test_writer.py -v`
 
 Expected: FAIL with "AssertionError" or method not implemented errors
 
@@ -845,7 +845,7 @@ from pyspark.sql.datasource import DataSource, DataSourceWriter, DataSourceStrea
 
 **Step 4: Run tests to verify they pass**
 
-Run: `poetry run pytest tests/test_writer.py -v`
+Run: `uv run pytest tests/test_writer.py -v`
 
 Expected: PASS (all tests should pass)
 
@@ -936,7 +936,7 @@ def test_stream_writer_write(basic_options, sample_schema, mock_cassandra_cluste
 
 **Step 2: Run tests to verify they fail**
 
-Run: `poetry run pytest tests/test_stream_writer.py -v`
+Run: `uv run pytest tests/test_stream_writer.py -v`
 
 Expected: FAIL with "NotImplementedError" or assertion errors
 
@@ -968,7 +968,7 @@ class CassandraStreamWriter(CassandraWriter, DataSourceStreamWriter):
 
 **Step 4: Run tests to verify they pass**
 
-Run: `poetry run pytest tests/test_stream_writer.py -v`
+Run: `uv run pytest tests/test_stream_writer.py -v`
 
 Expected: PASS (all tests should pass)
 
@@ -1022,7 +1022,7 @@ Integration tests requiring a running Cassandra instance.
 To run these tests:
 1. Start Cassandra: cd tests && docker-compose up -d
 2. Wait for ready: docker-compose exec cassandra cqlsh -e "describe keyspaces"
-3. Run tests: poetry run pytest tests/test_integration.py -v
+3. Run tests: uv run pytest tests/test_integration.py -v
 4. Stop Cassandra: cd tests && docker-compose down
 """
 
@@ -1192,7 +1192,7 @@ Add to `tests/test_integration.py` docstring (already included above).
 
 **Step 4: Run unit tests to ensure nothing broke**
 
-Run: `poetry run pytest tests/ -v -m "not integration"`
+Run: `uv run pytest tests/ -v -m "not integration"`
 
 Expected: PASS (all unit tests should pass)
 
@@ -1240,7 +1240,7 @@ Python Data Source for Apache Spark enabling batch and streaming reads/writes to
 ## Installation
 
 ```bash
-poetry install
+uv sync
 ```
 
 ## Quick Start
@@ -1318,27 +1318,27 @@ df.write.format("pycassandra") \
 ### Setup
 
 ```bash
-poetry install
+uv sync
 ```
 
 ### Run Tests
 
 ```bash
 # Unit tests only
-poetry run pytest -v -m "not integration"
+uv run pytest -v -m "not integration"
 
 # Integration tests (requires Cassandra)
 cd tests && docker-compose up -d
-poetry run pytest -v -m integration
+uv run pytest -v -m integration
 cd tests && docker-compose down
 ```
 
 ### Code Quality
 
 ```bash
-poetry run ruff check src/
-poetry run ruff format src/
-poetry run mypy src/
+uv run ruff check src/
+uv run ruff format src/
+uv run mypy src/
 ```
 
 ## Design
@@ -1363,7 +1363,7 @@ MIT
 
 **Step 3: Run all tests to verify everything works**
 
-Run: `poetry run pytest -v -m "not integration"`
+Run: `uv run pytest -v -m "not integration"`
 
 Expected: PASS (all unit tests pass)
 
@@ -1383,7 +1383,7 @@ git commit -m "docs: update README with usage examples and API reference"
 
 **Step 1: Run full test suite**
 
-Run: `poetry run pytest -v -m "not integration"`
+Run: `uv run pytest -v -m "not integration"`
 
 Expected: All tests PASS
 
@@ -1391,16 +1391,16 @@ Expected: All tests PASS
 
 Run:
 ```bash
-poetry run ruff check src/cassandra_data_source/
-poetry run ruff format src/cassandra_data_source/
-poetry run mypy src/cassandra_data_source/
+uv run ruff check src/cassandra_data_source/
+uv run ruff format src/cassandra_data_source/
+uv run mypy src/cassandra_data_source/
 ```
 
 Expected: No errors
 
 **Step 3: Build package**
 
-Run: `poetry build`
+Run: `uv build`
 
 Expected: Wheel created in `dist/` directory
 
@@ -1411,7 +1411,7 @@ If you have a local Cassandra instance:
 ```bash
 cd tests && docker-compose up -d
 # Wait for Cassandra to be ready
-poetry run pytest tests/test_integration.py -v -m integration
+uv run pytest tests/test_integration.py -v -m integration
 cd tests && docker-compose down
 ```
 
@@ -1445,7 +1445,7 @@ After Phase 1 is complete:
 ## Notes for Implementer
 
 - Always run tests after each step to catch issues early
-- Use `poetry run` prefix for all Python commands
+- Use `uv run` prefix for all Python commands
 - Follow SIMPLE principles - no over-engineering
 - Commit frequently with descriptive messages
 - If integration tests fail, check Cassandra is running: `docker ps`
