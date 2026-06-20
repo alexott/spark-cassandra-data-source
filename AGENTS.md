@@ -169,10 +169,10 @@ Before adding any code, ask yourself:
 
 ### Python Execution Rules
 
-**CRITICAL: Always use `poetry run` instead of direct `python`:**
+**CRITICAL: Always use `uv run` instead of direct `python`:**
 ```bash
 # ✅ CORRECT
-poetry run python script.py
+uv run python script.py
 
 # ❌ WRONG
 python script.py
@@ -182,38 +182,38 @@ python script.py
 
 ### Package Management
 
-- **Python**: Use `poetry add/remove` for dependencies, never edit `pyproject.toml` manually
+- **Python**: Use `uv add/remove` for dependencies, never edit `pyproject.toml` manually
 - Always check if dependencies already exist before adding new ones
 - **Principle**: Only add dependencies if absolutely critical
 
 ### Setup
 ```bash
 # Install dependencies (first time)
-poetry install
+uv sync
 
 # Activate environment
-. $(poetry env info -p)/bin/activate
+. .venv/bin/activate
 ```
 
 ### Testing
 ```bash
 # Run all tests
-poetry run pytest
+uv run pytest
 
 # Run specific test file
-poetry run pytest tests/test_splunk.py
+uv run pytest tests/test_splunk.py
 
 # Run single test
-poetry run pytest tests/test_splunk.py::TestSplunkDataSource::test_name
+uv run pytest tests/test_splunk.py::TestSplunkDataSource::test_name
 
 # Run with verbose output
-poetry run pytest -v
+uv run pytest -v
 ```
 
 ### Building
 ```bash
 # Build wheel package
-poetry build
+uv build
 
 # Output will be in dist/ directory
 ```
@@ -221,11 +221,11 @@ poetry build
 ### Code Quality
 ```bash
 # Format and lint code (ruff)
-poetry run ruff check cyber_connectors/
-poetry run ruff format cyber_connectors/
+uv run ruff check cyber_connectors/
+uv run ruff format cyber_connectors/
 
 # Type checking
-poetry run mypy cyber_connectors/
+uv run mypy cyber_connectors/
 ```
 
 ## Testing Guidelines
@@ -247,7 +247,7 @@ poetry run mypy cyber_connectors/
 - **Python version**: 3.10-3.13 (defined in `pyproject.toml`)
 - **Spark version**: 4.0.1+ required (PySpark DataSource API)
 - **Dependencies**: Keep minimal - only add if critically needed
-- **Never use direct `python` commands**: Always use `poetry run python`
+- **Never use direct `python` commands**: Always use `uv run python`
 - **Ruff configuration**: Line length 120, enforces docstrings, isort, flake8-bugbear
 - **No premature optimization**: Focus on clarity over performance
 

@@ -14,7 +14,7 @@ Python Data Source for Apache Spark enabling batch and streaming reads/writes to
 ## Installation
 
 ```bash
-poetry install
+uv sync
 ```
 
 ## Quick Start
@@ -161,27 +161,27 @@ df = spark.read.format("pycassandra") \
 ### Setup
 
 ```bash
-poetry install
+uv sync
 ```
 
 ### Run Tests
 
 ```bash
 # Unit tests only
-poetry run pytest -v -m "not integration"
+uv run pytest -v -m "not integration"
 
 # Integration tests (requires Cassandra)
 cd tests && docker-compose up -d
-poetry run pytest -v -m integration
+uv run pytest -v -m integration
 cd tests && docker-compose down
 ```
 
 ### Code Quality
 
 ```bash
-poetry run ruff check src/
-poetry run ruff format src/
-poetry run mypy src/
+uv run ruff check src/
+uv run ruff format src/
+uv run mypy src/
 ```
 
 ## Design

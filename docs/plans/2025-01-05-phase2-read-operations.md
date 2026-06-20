@@ -131,7 +131,7 @@ def test_derive_schema_with_column_filter():
 
 **Step 2: Run tests to verify they fail**
 
-Run: `poetry run pytest tests/test_schema.py -v`
+Run: `uv run pytest tests/test_schema.py -v`
 
 Expected: FAIL with "ModuleNotFoundError: No module named 'cassandra_data_source.schema'"
 
@@ -243,7 +243,7 @@ def derive_schema_from_table(table_metadata, columns=None):
 
 **Step 4: Run tests to verify they pass**
 
-Run: `poetry run pytest tests/test_schema.py -v`
+Run: `uv run pytest tests/test_schema.py -v`
 
 Expected: PASS (all 6 tests)
 
@@ -324,7 +324,7 @@ def test_token_range_partition_equality():
 
 **Step 2: Run tests to verify they fail**
 
-Run: `poetry run pytest tests/test_partitioning.py -v`
+Run: `uv run pytest tests/test_partitioning.py -v`
 
 Expected: FAIL with "ModuleNotFoundError"
 
@@ -389,7 +389,7 @@ class TokenRangePartition(InputPartition):
 
 **Step 4: Run tests to verify they pass**
 
-Run: `poetry run pytest tests/test_partitioning.py -v`
+Run: `uv run pytest tests/test_partitioning.py -v`
 
 Expected: PASS (all 2 tests)
 
@@ -523,7 +523,7 @@ def test_reader_uses_provided_schema(mock_table_metadata):
 
 **Step 2: Run tests to verify they fail**
 
-Run: `poetry run pytest tests/test_reader.py -v`
+Run: `uv run pytest tests/test_reader.py -v`
 
 Expected: FAIL with "ModuleNotFoundError"
 
@@ -687,7 +687,7 @@ class CassandraBatchReader(CassandraReader, DataSourceReader):
 
 **Step 4: Run tests to verify they pass**
 
-Run: `poetry run pytest tests/test_reader.py -v`
+Run: `uv run pytest tests/test_reader.py -v`
 
 Expected: PASS (all 4 tests)
 
@@ -756,7 +756,7 @@ def test_reader_creates_partitions_from_token_ranges(mock_table_metadata):
 
 **Step 2: Run test to verify it fails**
 
-Run: `poetry run pytest tests/test_reader.py::test_reader_creates_partitions_from_token_ranges -v`
+Run: `uv run pytest tests/test_reader.py::test_reader_creates_partitions_from_token_ranges -v`
 
 Expected: FAIL with "AssertionError" or "TypeError"
 
@@ -804,7 +804,7 @@ def partitions(self):
 
 **Step 4: Run test to verify it passes**
 
-Run: `poetry run pytest tests/test_reader.py::test_reader_creates_partitions_from_token_ranges -v`
+Run: `uv run pytest tests/test_reader.py::test_reader_creates_partitions_from_token_ranges -v`
 
 Expected: PASS
 
@@ -885,7 +885,7 @@ def test_reader_read_executes_token_range_query(mock_table_metadata):
 
 **Step 2: Run test to verify it fails**
 
-Run: `poetry run pytest tests/test_reader.py::test_reader_read_executes_token_range_query -v`
+Run: `uv run pytest tests/test_reader.py::test_reader_read_executes_token_range_query -v`
 
 Expected: FAIL
 
@@ -976,7 +976,7 @@ def read(self, partition):
 
 **Step 4: Run test to verify it passes**
 
-Run: `poetry run pytest tests/test_reader.py::test_reader_read_executes_token_range_query -v`
+Run: `uv run pytest tests/test_reader.py::test_reader_read_executes_token_range_query -v`
 
 Expected: PASS
 
@@ -1058,7 +1058,7 @@ def test_data_source_schema_method(mock_table_metadata):
 
 **Step 2: Run tests to verify they fail**
 
-Run: `poetry run pytest tests/test_options.py::test_data_source_reader_factory -v`
+Run: `uv run pytest tests/test_options.py::test_data_source_reader_factory -v`
 
 Expected: FAIL with "AttributeError"
 
@@ -1112,7 +1112,7 @@ class CassandraDataSource(DataSource):
 
 **Step 4: Run tests to verify they pass**
 
-Run: `poetry run pytest tests/test_options.py::test_data_source_reader_factory -v`
+Run: `uv run pytest tests/test_options.py::test_data_source_reader_factory -v`
 
 Expected: PASS
 
@@ -1265,7 +1265,7 @@ def test_read_with_schema_projection_integration(spark, cassandra_setup):
 
 **Step 2: Run integration tests**
 
-Run: `cd tests && docker-compose up -d && cd .. && poetry run pytest tests/test_integration.py -v -m integration`
+Run: `cd tests && docker-compose up -d && cd .. && uv run pytest tests/test_integration.py -v -m integration`
 
 Expected: PASS (if Cassandra is running)
 
@@ -1365,7 +1365,7 @@ Update the Phase Status section:
 
 **Step 3: Run all tests to verify nothing broke**
 
-Run: `poetry run pytest -v -m "not integration"`
+Run: `uv run pytest -v -m "not integration"`
 
 Expected: All tests PASS
 
@@ -1385,7 +1385,7 @@ git commit -m "docs: update README with read operations examples"
 
 **Step 1: Run full test suite**
 
-Run: `poetry run pytest -v -m "not integration"`
+Run: `uv run pytest -v -m "not integration"`
 
 Expected: All tests PASS
 
@@ -1393,16 +1393,16 @@ Expected: All tests PASS
 
 Run:
 ```bash
-poetry run ruff check src/cassandra_data_source/
-poetry run ruff format src/cassandra_data_source/
-poetry run mypy src/cassandra_data_source/
+uv run ruff check src/cassandra_data_source/
+uv run ruff format src/cassandra_data_source/
+uv run mypy src/cassandra_data_source/
 ```
 
 Expected: No errors
 
 **Step 3: Build package**
 
-Run: `poetry build`
+Run: `uv build`
 
 Expected: Success
 
