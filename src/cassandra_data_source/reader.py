@@ -4,6 +4,7 @@ from pyspark.sql.datasource import DataSourceReader
 
 from .partitioning import TokenRangePartition  # noqa: F401 - used in Task 4
 from .schema import derive_schema_from_table
+from .filters import validate_cassandra_filters
 
 
 def _convert_cassandra_value(value):
@@ -109,6 +110,9 @@ class CassandraReader:
         self.filter = options.get("filter")  # Optional WHERE clause filter
         self.allow_filtering = options.get("allow_filtering", "false").lower() == "true"
 
+        # Initialize pushed filters (populated by pushFilters method in Spark 4.1+)
+        self.pushed_filters_cql = []
+
         # Load metadata and schema
         self._load_metadata()
 
@@ -161,6 +165,14 @@ class CassandraReader:
 
             # Extract partition key columns
             self.pk_columns = [col.name for col in table_meta.partition_key]
+
+            # Extract clustering columns (in order)
+            self.clustering_columns = [col.name for col in table_meta.clustering_key]
+
+            # Get indexed columns (columns with secondary indexes)
+            self.indexed_columns = [
+                idx.column_name for idx in table_meta.indexes.values()
+            ] if hasattr(table_meta, 'indexes') and table_meta.indexes else []
 
             # Get column types for type conversion
             self.column_types = {col.name: col.cql_type for col in table_meta.columns.values()}
@@ -223,6 +235,42 @@ class CassandraReader:
                 f"Schema contains columns not in Cassandra table: {', '.join(missing)}. "
                 f"Available columns: {', '.join(sorted(cassandra_columns))}"
             )
+
+    def pushFilters(self, filters):
+        """
+        Push filters down to Cassandra (Spark 4.1+ only).
+
+        Validates filters according to Cassandra predicate pushdown restrictions
+        and converts supported filters to CQL WHERE clauses.
+
+        Args:
+            filters: List of Spark Filter objects
+
+        Yields:
+            Filters that cannot be pushed down and must be evaluated by Spark
+
+        Note:
+            This method is only available in Spark 4.1+. For Spark 4.0 compatibility,
+            the method won't be called and users should use the 'filter' option instead.
+        """
+        if not filters:
+            return
+
+        # Validate and convert filters to CQL
+        unsupported, cql_clauses = validate_cassandra_filters(
+            filters,
+            partition_key_columns=self.pk_columns,
+            clustering_columns=self.clustering_columns,
+            indexed_columns=self.indexed_columns,
+            allow_filtering=self.allow_filtering
+        )
+
+        # Store supported filters for use in read() method
+        self.pushed_filters_cql = cql_clauses
+
+        # Return unsupported filters for Spark to evaluate
+        for f in unsupported:
+            yield f
 
     def partitions(self):
         """
@@ -387,11 +435,24 @@ class CassandraReader:
                 )
 
             # Add optional filter with AND if present
+            # Combine user-provided 'filter' option with pushed filters from Spark 4.1+
+            additional_conditions = []
+            
+            # Add user-provided filter if present
             if self.filter:
-                where_clause = f"({where_clause}) AND ({self.filter})"
+                additional_conditions.append(f"({self.filter})")
+            
+            # Add pushed filters (from pushFilters method in Spark 4.1+)
+            if self.pushed_filters_cql:
+                additional_conditions.extend(self.pushed_filters_cql)
+            
+            # Combine all conditions with AND
+            if additional_conditions:
+                combined_conditions = " AND ".join(additional_conditions)
+                where_clause = f"({where_clause}) AND ({combined_conditions})"
 
-            # Build full query
-            query = f"SELECT {columns_str} FROM {self.table} WHERE {where_clause}"
+            # Build full query (include keyspace to avoid ambiguity)
+            query = f"SELECT {columns_str} FROM {self.keyspace}.{self.table} WHERE {where_clause}"
 
             # Append ALLOW FILTERING at the end if requested (must be outside WHERE clause)
             if self.allow_filtering:
@@ -400,15 +461,29 @@ class CassandraReader:
             # Execute query with consistency level
             # Note: Consistency level should be set on the session or SimpleStatement
             # For now, we execute directly (can be enhanced later with SimpleStatement)
-            result_set = session.execute(query)
+            try:
+                result_set = session.execute(query)
 
-            # Yield rows as tuples matching schema order
-            for row in result_set:
-                # Convert row to tuple matching schema column order
-                # Row is a namedtuple, access attributes by name
-                # Convert Cassandra types to Python types
-                values = tuple(_convert_cassandra_value(getattr(row, col)) for col in self.columns)
-                yield values
+                # Yield rows as tuples matching schema order
+                for row in result_set:
+                    # Convert row to tuple matching schema column order
+                    # Row is a namedtuple, access attributes by name
+                    # Convert Cassandra types to Python types
+                    values = tuple(_convert_cassandra_value(getattr(row, col)) for col in self.columns)
+                    yield values
+            except Exception as e:
+                # Import cassandra exceptions here to catch ReadFailure specifically
+                from cassandra import ReadFailure
+                
+                # If this is a ReadFailure, enhance error message with WHERE clause
+                if isinstance(e, ReadFailure):
+                    raise RuntimeError(
+                        f"Cassandra read failed: {query}\n"
+                        f"Original error: {e}"
+                    ) from e
+                else:
+                    # Re-raise other exceptions as-is
+                    raise
 
         finally:
             # Always close connection
